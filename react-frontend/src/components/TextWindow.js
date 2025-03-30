@@ -47,11 +47,11 @@ const TextWindow = ({ nickname, deviceId }) => {
   }, [messages]);
 
   return (
-    <div className="w-full h-full px-[5%] flex flex-col bg-[#F5F5F0] text-[#333333] rounded-lg shadow-xl">
+    <div className="w-full h-full px-[5%] flex flex-col bg-[#F5F5F0] text-[#333333] border rounded-xl shadow-xl">
       {/* Messages Container */}
       <div
         ref={chatContainerRef}
-        className="flex-1 overflow-y-auto p-4 rounded-t-lg"
+        className="flex-1 overflow-y-auto p-4"
       >
         {messages.length === 0 && (
           <div className="text-center text-[#333333]">No messages yet...</div>

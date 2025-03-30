@@ -35,7 +35,7 @@ export default function MapComponent() {
   }, []);
 
   return (
-    <div className={`flex relative justify-center items-center shadow-xl rounded-xl h-[80vh] transition-all duration-300 ease-in-out overflow-hidden ${isMaximized ? 'max-w-[50vw]' : 'max-w-[13vw]'}`}>
+    <div className={`flex relative justify-center items-center shadow-xl border rounded-xl h-full transition-all duration-300 ease-in-out overflow-hidden ${isMaximized ? 'max-w-[50vw]' : 'max-w-[13vw]'}`}>
       { currentPosition ?  <MapContainer 
         center={currentPosition} 
         zoom={15} 
