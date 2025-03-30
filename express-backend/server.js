@@ -1,4 +1,5 @@
 const express = require("express");
+const axios = require("axios");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const { exec } = require("child_process");
@@ -16,6 +17,7 @@ const createMesh = require("./blockchain/createMesh");
 const joinMesh = require("./routes/joinMesh");
 const leaveMesh = require("./routes/leaveMesh");
 const { broadcastMessageToMesh } = require("./ws/wsServer");
+const syncToIPFS = require("./blockchain/syncToBlockchain");
 
 
 dotenv.config();
@@ -152,8 +154,6 @@ app.post("/api/send-message", async (req, res) => {
   });
 
   // Save to local database
-  const fs = require("fs");
-  const path = require("path");
   const configPath = path.join(__dirname, "local_config.json");
   const { username, password } = JSON.parse(fs.readFileSync(configPath, "utf-8")).postgres;
 
@@ -180,6 +180,176 @@ app.post("/api/send-message", async (req, res) => {
   }
 });
 
+app.post("/api/sync", async (req, res) => {
+  const { meshID, deviceID } = req.body;
+
+  if (!meshID || !deviceID) {
+    return res.status(400).json({ error: "Missing meshID or deviceID" });
+  }
+
+  // Load Postgres credentials
+  const configPath = path.join(__dirname, "local_config.json");
+  const { username, password } = JSON.parse(fs.readFileSync(configPath, "utf-8")).postgres;
+
+  const client = new Client({
+    user: username,
+    password,
+    host: "localhost",
+    port: 5432,
+    database: deviceID
+  });
+
+  try {
+    await client.connect();
+
+    // 1. Get all unsynced messages
+    const { rows: unsyncedMessages } = await client.query(`
+      SELECT * FROM Local
+      WHERE isSynced = false AND MeshID = $1
+    `, [meshID]);
+
+    if (unsyncedMessages.length === 0) {
+      await client.end();
+      return res.status(200).json({ success: true, message: "No unsynced messages." });
+    }
+
+    // 2. Format messages for IPFS
+    const formatted = unsyncedMessages.map((msg) => ({
+      message: msg.message,
+      timestamp: msg.timestamp,
+      deviceID,
+    }));
+
+    // 3. Upload to IPFS & blockchain
+    const { cid, version } = await syncToIPFS(formatted, meshID);
+
+    // 4. Mark messages as synced
+    await client.query(`
+      UPDATE Local
+      SET isSynced = true
+      WHERE isSynced = false AND MeshID = $1
+    `, [meshID]);
+
+    await client.end();
+
+    res.json({ success: true, cid, version, syncedCount: formatted.length });
+
+  } catch (err) {
+    console.error("❌ Sync failed:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/get-latest-version", async (req, res) => {
+  const { meshID, deviceID } = req.body;
+
+  if (!meshID || !deviceID) {
+    return res.status(400).json({ error: "Missing meshID or deviceID" });
+  }
+
+  const configPath = path.join(__dirname, "local_config.json");
+  const { username, password } = JSON.parse(fs.readFileSync(configPath, "utf-8")).postgres;
+
+  const client = new Client({
+    user: username,
+    password,
+    host: "localhost",
+    port: 5432,
+    database: deviceID,
+  });
+
+  try {
+    await client.connect();
+
+    // 1. Get latest CID from IPCM smart contract
+    const cid = await getCID();
+    console.log("📥 Fetching from IPFS:", cid);
+
+    // 2. Fetch data from IPFS gateway
+    const ipfsURL = `https://gateway.pinata.cloud/ipfs/${cid}`;
+    const response = await axios.get(ipfsURL);
+    const messages = response.data;
+
+    if (!Array.isArray(messages)) throw new Error("Invalid message format");
+
+    // 3. Insert each message into Global table
+    for (const msg of messages) {
+      await client.query(
+        `INSERT INTO Global (MeshID, Timestamp, Message, DeviceID, DeviceNickname)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [meshID, msg.timestamp, msg.message, msg.deviceID, msg.deviceNickname || "Unknown"]
+      );
+    }
+
+    await client.end();
+
+    res.json({ success: true, count: messages.length, cid });
+
+  } catch (err) {
+    console.error("❌ Error syncing from blockchain:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get("/api/messages/:meshID/:deviceID", async (req, res) => {
+  const { meshID, deviceID } = req.params;
+
+  const configPath = path.join(__dirname, "local_config.json");
+  const { username, password } = JSON.parse(fs.readFileSync(configPath, "utf-8")).postgres;
+
+  const client = new Client({
+    user: username,
+    password,
+    host: "localhost",
+    port: 5432,
+    database: deviceID
+  });
+
+  try {
+    await client.connect();
+
+    // 1. Fetch from Global table
+    const globalRes = await client.query(
+      `SELECT Message, Timestamp, DeviceID, DeviceNickname
+       FROM Global
+       WHERE MeshID = $1`, [meshID]
+    );
+
+    // 2. Fetch from Local table
+    const localRes = await client.query(
+      `SELECT Message, Timestamp
+       FROM Local
+       WHERE MeshID = $1`, [meshID]
+    );
+
+    await client.end();
+
+    // 3. Merge and tag source
+    const allMessages = [
+      ...globalRes.rows.map(m => ({
+        ...m,
+        source: "Global"
+      })),
+      ...localRes.rows.map(m => ({
+        ...m,
+        deviceID,
+        deviceNickname: "You",
+        source: "Local"
+      }))
+    ];
+
+    // 4. Sort by timestamp
+    allMessages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+    res.json({ success: true, messages: allMessages });
+
+  } catch (err) {
+    console.error("❌ Failed to retrieve messages:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+
 
 app.post("/api/updateCID", async (req, res) => {
   const { cid } = req.body;
@@ -204,12 +374,6 @@ app.get("/api/getCID", async (req, res) => {
 });
 
 
-
 httpServer.listen(PORT, () => {
   console.log(`✅ Express + WebSocket backend running on http://localhost:${PORT}`);
-});
-
-/* ─────────────── 🚀 START SERVER ─────────────── */
-app.listen(PORT, () => {
-  console.log(`✅ Express backend running on http://localhost:${PORT}`);
 });
