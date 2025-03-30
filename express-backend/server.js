@@ -145,7 +145,40 @@ app.post("/api/send-message", async (req, res) => {
 
   const timestamp = new Date().toISOString();
 
-  // Broadcast via WebSocket
+  try {
+    const configPath = path.join(__dirname, "local_config.json");
+    const { username, password } = JSON.parse(fs.readFileSync(configPath, "utf-8")).postgres;
+
+    const client = new Client({
+      user: username,
+      password,
+      host: "localhost",
+      port: 5432,
+      database: deviceID
+    });
+
+    await client.connect();
+    await client.query(
+      `INSERT INTO Local (MeshID, TimeStamp, Message, isSynced)
+       VALUES ($1, $2, $3, false)`,
+      [meshID, timestamp, message]
+    );
+    await client.end();
+
+    res.json({ success: true, timestamp });
+  } catch (err) {
+    console.error("❌ Error saving message:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/broadcast-message", (req, res) => {
+  const { meshID, message, deviceID, deviceNickname, timestamp } = req.body;
+
+  if (!meshID || !message || !deviceID || !deviceNickname || !timestamp) {
+    return res.status(400).json({ error: "Missing broadcast data" });
+  }
+
   broadcastMessageToMesh(meshID, {
     message,
     deviceID,
@@ -153,32 +186,9 @@ app.post("/api/send-message", async (req, res) => {
     timestamp
   });
 
-  // Save to local database
-  const configPath = path.join(__dirname, "local_config.json");
-  const { username, password } = JSON.parse(fs.readFileSync(configPath, "utf-8")).postgres;
-
-  const client = new Client({
-    user: username,
-    password,
-    host: "localhost",
-    port: 5432,
-    database: deviceID
-  });
-
-  try {
-    await client.connect();
-    await client.query(`
-      INSERT INTO Local (MeshID, TimeStamp, Message, isSynced)
-      VALUES ($1, $2, $3, false)
-    `, [meshID, timestamp, message]);
-    await client.end();
-
-    res.json({ success: true });
-  } catch (err) {
-    console.error("❌ Error saving message:", err);
-    res.status(500).json({ success: false, error: err.message });
-  }
+  res.json({ success: true });
 });
+
 
 app.post("/api/sync", async (req, res) => {
   const { meshID, deviceID } = req.body;
