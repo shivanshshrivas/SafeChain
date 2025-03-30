@@ -2,13 +2,16 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { Client } = require("pg");
-const pinataSDK = require("@pinata/sdk");
+const { broadcastMeshAnnouncement } = require("../ws/wsServer");
 const { updateCID } = require("./ipcm");
-const { broadcastMeshAnnouncement } = require("../ws/wsServer"); // import at top
+const { PinataSDK } = require("pinata");
 
 require("dotenv").config();
 
-const pinata = new pinataSDK(process.env.PINATA_API_KEY, process.env.PINATA_SECRET_API_KEY);
+// ✅ Authenticate with JWT
+const pinata = new PinataSDK({
+  pinataJwt: process.env.PINATA_JWT,
+});
 
 const configPath = path.join(__dirname, "../local_config.json");
 const { username, password } = JSON.parse(fs.readFileSync(configPath, "utf-8")).postgres;
@@ -21,81 +24,65 @@ async function createMesh(meshName, deviceID) {
   const meshID = generateMeshID();
   const createdAt = new Date().toISOString();
 
-  const groupMetadata = {
-    name: `mesh-${meshID}`,
-    metadata: {
-      meshName,
-      createdBy: deviceID,
-      createdAt
-    }
-  };
+  // 1. Create the group
+  const group = await pinata.groups.public.create({ name: `mesh-${meshID}` });
+  const groupId = group.id;
 
-  // 1. Create the file group on Pinata
-  const groupResponse = await pinata.createPinataFileGroup(groupMetadata);
-  const groupId = groupResponse.data.id;
-
-  // 2. Create mesh_created.json
+  // 2. Create a temporary file for the mesh metadata
   const meshData = {
     type: "mesh_created",
     meshName,
     meshID,
     createdAt,
-    createdBy: deviceID
+    createdBy: deviceID,
   };
 
   const tempFolder = path.join(__dirname, `../.temp/mesh-${meshID}`);
   fs.mkdirSync(tempFolder, { recursive: true });
-
   const meshFilePath = path.join(tempFolder, "mesh_created.json");
   fs.writeFileSync(meshFilePath, JSON.stringify(meshData, null, 2));
 
-  // 3. Upload to group
-  const pinResponse = await pinata.pinFileToIPFS(fs.createReadStream(meshFilePath), {
-    pinataMetadata: {
-      name: `mesh_created_${meshID}`,
-      keyvalues: {
-        meshID,
-        groupId,
-        version: "0"
-      }
-    }
-  });
+  // 3. Upload to IPFS + associate with group
+  const file = fs.readFileSync(meshFilePath);
+  const upload = await pinata.upload.public.file(
+    new File([file], "mesh_created.json", { type: "application/json" })
+  );
 
-  const fileCID = pinResponse.IpfsHash;
-  const ipfsLink = `ipfs://${fileCID}`;
+  const fileId = upload.id;
+  await pinata.groups.public.addFiles({ groupId, files: [fileId] });
 
-  // 4. Push CID to IPCM smart contract
+  const ipfsLink = `ipfs://${upload.cid}`;
+
+  // 4. Push CID to blockchain via IPCM
   await updateCID(ipfsLink);
 
-  // 5. Save to local Postgres MeshInfo
+  // 5. Save to Postgres
   const client = new Client({
     user: username,
     password,
     host: "localhost",
     port: 5432,
-    database: deviceID
+    database: deviceID,
   });
 
   await client.connect();
-
   await client.query(`UPDATE MeshInfo SET isActive = false`);
+  await client.query(
+    `INSERT INTO MeshInfo (MeshID, joinedAt, isActive, lastSynced, syncedVersion, IPFSlink, nameOfMesh)
+     VALUES ($1, NOW(), true, NULL, 0, $2, $3)`,
+    [meshID, ipfsLink, meshName]
+  );
+  await client.end();
 
-  await client.query(`
-    INSERT INTO MeshInfo (
-      MeshID, joinedAt, isActive, lastSynced, syncedVersion, IPFSlink, nameOfMesh
-    ) VALUES ($1, NOW(), true, NULL, 0, $2, $3)
-  `, [meshID, ipfsLink, meshName]);
-
+  // 6. Announce over WebSocket
   broadcastMeshAnnouncement({
     meshID,
     name: meshName,
     ipfsLink,
-    createdBy: deviceID
+    createdBy: deviceID,
   });
 
-  await client.end();
-
-  // Optional: clean up temp file
+  // Optional: cleanup
   fs.rmSync(tempFolder, { recursive: true, force: true });
 
   return { meshID, ipfsLink, createdAt, groupId };
