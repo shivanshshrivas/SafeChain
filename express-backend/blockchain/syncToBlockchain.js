@@ -1,57 +1,54 @@
-const axios = require("axios");
-const FormData = require("form-data");
 const fs = require("fs");
 const path = require("path");
 const { updateCID } = require("./ipcm");
+const { PinataSDK } = require("pinata");
+const { Blob } = require("buffer"); // ✅ Add this!
 
-const PINATA_API_KEY = process.env.PINATA_API_KEY;
-const PINATA_API_SECRET = process.env.PINATA_API_SECRET;
-const PINATA_GROUP_BASE = process.env.PINATA_GROUP_BASE || "SafeChainMesh_";
+require("dotenv").config();
+
+const pinata = new PinataSDK({
+  pinataJwt: process.env.PINATA_JWT,
+});
 
 async function syncToBlockchain(messages, meshID) {
-  const version = Date.now(); // or increment if you’re tracking it
+  const version = Date.now();
   const tempPath = path.join(__dirname, `./temp-messages-${version}.json`);
 
-  // 1. Save messages to a temporary file
+  // 1. Save messages to disk
   fs.writeFileSync(tempPath, JSON.stringify(messages, null, 2));
 
-  // 2. Upload to IPFS via Pinata
-  const data = new FormData();
-  data.append("file", fs.createReadStream(tempPath));
+  // 2. Read file and convert to Blob
+  const fileBuffer = fs.readFileSync(tempPath);
+  const blob = new Blob([fileBuffer], { type: "application/json" }); // ✅ wrap in Blob
 
-  const uploadRes = await axios.post("https://api.pinata.cloud/pinning/pinFileToIPFS", data, {
-    headers: {
-      ...data.getHeaders(),
-      pinata_api_key: PINATA_API_KEY,
-      pinata_secret_api_key: PINATA_API_SECRET,
-    },
+  // 3. Upload file using new Pinata SDK
+  const upload = await pinata.upload.public.file(blob, {
+    filename: `messages-${version}.json`
   });
 
-  const cid = uploadRes.data.IpfsHash;
-  console.log("📦 Uploaded to IPFS:", cid);
+  const cid = upload.cid;
+  const fileId = upload.id;
 
-  // 3. Add to Pinata File Group (based on MeshID)
-  const groupRes = await axios.post(
-    "https://api.pinata.cloud/file_group/add/pin",
-    {
-      groupName: `${PINATA_GROUP_BASE}${meshID}`,
-      pin: cid,
-    },
-    {
-      headers: {
-        "Content-Type": "application/json",
-        pinata_api_key: PINATA_API_KEY,
-        pinata_secret_api_key: PINATA_API_SECRET,
-      },
-    }
-  );
+  // 4. Create/find Pinata Group
+  const groupName = `mesh-${meshID}`;
+  const groups = await pinata.groups.public.list();
+  const existingGroup = groups.groups.find(g => g.name === groupName);
 
-  console.log("📚 Added to group:", groupRes.data);
+  let groupId;
+  if (existingGroup) {
+    groupId = existingGroup.id;
+  } else {
+    const group = await pinata.groups.public.create({ name: groupName });
+    groupId = group.id;
+  }
 
-  // 4. Update the latest CID on Polygon using IPCM smart contract
+  // 5. Add file to group
+  await pinata.groups.public.addFiles({ groupId, files: [fileId] });
+
+  // 6. Push CID to Polygon
   await updateCID(cid);
 
-  // 5. Clean up temp file
+  // 7. Cleanup
   fs.unlinkSync(tempPath);
 
   return { cid, version };

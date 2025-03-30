@@ -2,6 +2,7 @@ import logo from './logo.svg';
 import './App.css';
 import CreateMeshTester from './components/CreateMeshTester';
 import MeshDiscovery from './components/MeshDiscovery';
+import LiveChat from './components/LiveChat';
 
 // function App() {
 //   return (
@@ -28,7 +29,7 @@ import MeshDiscovery from './components/MeshDiscovery';
 
 function App() {
   return (
-    <MeshDiscovery />
+    <LiveChat />
   )
 }
 
