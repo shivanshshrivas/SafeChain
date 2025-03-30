@@ -50,7 +50,10 @@ const DeviceSetup = () => {
 
 
   const handleJoinMesh = () => {
-    navigate("/mesh-selection"); // Navigate to MeshSelection component 
+    navigate("/mesh-selection",
+      { state: { nickname: name }}
+    ); // Navigate to MeshSelection component
+     
   }
 
   const handleCreateMesh = () => {
