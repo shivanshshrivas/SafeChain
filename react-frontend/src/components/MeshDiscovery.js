@@ -6,9 +6,13 @@ const MeshDiscovery = () => {
   const [deviceID, setDeviceID] = useState("");
   const [joining, setJoining] = useState(false);
   const [joined, setJoined] = useState(null);
+  const [meshName, setMeshName] = useState("");
+  const [ipfsLink, setIpfsLink] = useState("");
+  const [createdBy, setCreatedBy] = useState("");
+  const [meshID, setMeshID] = useState("");
 
   useEffect(() => {
-    const ws = new WebSocket("ws://localhost:5000");
+    const ws = new WebSocket("ws://10.104.175.40:5000");
 
     ws.onmessage = (event) => {
       try {
@@ -19,6 +23,12 @@ const MeshDiscovery = () => {
             const alreadyExists = prev.find((m) => m.meshID === data.meshID);
             return alreadyExists ? prev : [...prev, data];
           });
+
+          // Set all the constants for use in the next function
+          setMeshName(data.name || "");
+          setIpfsLink(data.ipfsLink || "");
+          setCreatedBy(data.createdBy || "");
+          setMeshID(data.meshID || "");
         }
       } catch (err) {
         console.warn("Invalid WS message:", event.data);

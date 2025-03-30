@@ -29,7 +29,7 @@ async function joinMesh(meshID, meshName, ipfsLink, deviceID) {
 
   // 3. Fetch mesh_created.json from IPFS
   const rawCid = ipfsLink.replace("ipfs://", "");
-  const ipfsURL = `https://gateway.pinata.cloud/ipfs/${rawCid}/mesh_created.json`;
+  const ipfsURL = `https://crimson-high-narwhal-362.mypinata.cloud/ipfs/${rawCid}/mesh_created.json`;
 
   const response = await axios.get(ipfsURL);
   const meshInfo = response.data;
