@@ -1,36 +1,53 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAppContext } from "../context/AppContext";
-import configureDevice from "../components/ConfigureDevice"; // Import the backend function
 
 const DeviceSetup = () => {
   const { setDeviceId, setNickname } = useAppContext();
   const [name, setName] = useState("");
-  const [deviceId, setGeneratedDeviceId] = useState(""); // Store the generated deviceId
+  const [deviceId, setGeneratedDeviceId] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
 
-  const handleSetup = async () => {
-    if (!name.trim()) return;
+  const handleGenerateDeviceId = async () => {
+    if (!name.trim()) {
+      setError("Please enter a nickname first.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
     try {
-      const response = await configureDevice(name);
-      if (response.success) {
-        setDeviceId(response.deviceID);
+      const response = await fetch("http://localhost:5000/api/configure-device", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ nickname: name }), 
+      });
+
+      const data = await response.json();
+      console.log("🔍 Response:", data);
+      if (response.ok) {
+        setGeneratedDeviceId(data.deviceID);
+        setDeviceId(data.deviceID);
         setNickname(name);
-        setGeneratedDeviceId(response.deviceID);
-        navigate("/mesh-selection");
       } else {
-        setError("Failed to configure device. Please try again.");
+        setError(data.error || "Failed to generate Device ID. Try again.");
       }
     } catch (err) {
-      setError("An error occurred. Please check your connection.");
+      console.error("❌ Error:", err);
+      setError("Error connecting to server.");
     }
 
     setLoading(false);
+  };
+
+  const handleSetup = () => {
+    if (!deviceId || !name.trim()) return;
+    navigate("/mesh-selection");
   };
 
   return (
@@ -43,23 +60,25 @@ const DeviceSetup = () => {
         value={name}
         onChange={(e) => setName(e.target.value)}
         className="px-4 py-2 border rounded-full shadow-md font-inter mb-4 bg-white"
+        disabled={!!deviceId} // Prevent editing after device is configured
       />
 
-      <input
-        type="text"
-        value={deviceId || "Generating..."}
-        readOnly
-        className="px-4 py-2 border rounded-full shadow-md font-inter mb-4 bg-gray-200 text-gray-600"
-      />
+      <button
+        onClick={handleGenerateDeviceId}
+        disabled={loading || !!deviceId} // Disable after generating
+        className="px-4 py-2 mb-4 rounded-full shadow-md font-inter bg-[#E0DACD] hover:bg-[#D6D1C4]"
+      >
+        {loading ? "Generating..." : deviceId ? `Device ID: ${deviceId}` : "Generate Device ID"}
+      </button>
 
       {error && <p className="text-red-500 mb-4">{error}</p>}
 
       <button
         onClick={handleSetup}
-        disabled={loading}
-        className={`px-4 py-2 rounded-full shadow-md font-inter ${loading ? "bg-gray-400" : "bg-[#E0DACD] hover:bg-[#D6D1C4]"}`}
+        disabled={!deviceId || !name.trim()}
+        className="px-4 py-2 rounded-full shadow-md font-inter bg-[#E0DACD] hover:bg-[#D6D1C4]"
       >
-        {loading ? "Configuring..." : "Confirm"}
+        Confirm
       </button>
     </div>
   );
