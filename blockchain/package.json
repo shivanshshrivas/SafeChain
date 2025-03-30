@@ -9,5 +9,11 @@
   "author": "",
   "license": "ISC",
   "type": "commonjs",
-  "description": ""
+  "description": "",
+  "dependencies": {
+    "@iota/sdk": "^1.1.5",
+    "@pinata/sdk": "^2.1.0",
+    "axios": "^1.8.4",
+    "dotenv": "^16.4.7"
+  }
 }
