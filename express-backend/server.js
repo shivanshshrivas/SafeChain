@@ -1,131 +1,215 @@
-const express = require('express');
-const cors = require('cors');
-const dotenv = require('dotenv');
-const fs = require('fs');
-const path = require('path');
-const { exec } = require('child_process');
+const express = require("express");
+const cors = require("cors");
+const dotenv = require("dotenv");
+const { exec } = require("child_process");
+const fs = require("fs");
+const path = require("path");
+const crypto = require("crypto");
+const http = require("http");
+const { Client } = require("pg");
 
-const syncToBlockchain = require('../blockchain/syncToBlockchain');
-const getLatestCID = require('../blockchain/ipcmlink/getLatestCID');
-const fetchFromIPFS = require('../blockchain/ipfs/fetchFromIPFS');
+const { startWebSocketServer } = require("./ws/wsServer");
+const configureDevice = require("./device/configureDevice");
+const validatePostgres = require("./device/validatePostgres");
+const { updateCID, getCID } = require("./blockchain/ipcm");
+const createMesh = require("./blockchain/createMesh");
+const joinMesh = require("./routes/joinMesh");
+const leaveMesh = require("./routes/leaveMesh");
+const { broadcastMessageToMesh } = require("./ws/wsServer");
 
-const configureDevice = require('./device/configureDevice');
-const configureDb = require('./db/configureDb');
-const db = require('./db');
 
 dotenv.config();
+
 const app = express();
 const PORT = 3001;
 
 app.use(cors());
 app.use(express.json());
 
-// ✅ Health Check
-app.get('/api/ping', (req, res) => {
-  res.send('pong');
+app.get("/api/ping", (req, res) => {
+  res.send("pong");
 });
 
-// ✅ Configure Device
-app.post('/api/configure-device', async (req, res) => {
-  try {
-    const { nickname = 'Anonymous Node' } = req.body;
+const httpServer = http.createServer(app);
+startWebSocketServer(httpServer);
 
-    // 1. Generate device ID and config
-    const device = await configureDevice(nickname);
-    console.log(`🆔 Device ID: ${device.device_id}`);
+app.get("/api/check-postgres", (req, res) => {
+  const cmd = process.platform === "win32" ? "where psql" : "which psql";
 
-    // 2. Check if PostgreSQL is running
-    const pgRunning = await tryPostgresConnection();
+  exec(cmd, (err, stdout) => {
+    res.json({ installed: !err && stdout.trim().length > 0 });
+  });
+});
 
-    if (!pgRunning) {
-      console.log("⚠️ PostgreSQL not running, installing...");
-      await runPostgresInstaller(); // optional, comment if manual install
+
+app.post("/api/install-postgres", (req, res) => {
+  const username = "safechain_user";
+  const password = crypto.randomBytes(8).toString("hex");
+
+  const configPath = path.join(__dirname, "local_config.json");
+  fs.writeFileSync(
+    configPath,
+    JSON.stringify({ postgres: { username, password } }, null, 2)
+  );
+
+  const command = process.platform === "win32"
+    ? `installer\\install_postgres.bat ${username} ${password}`
+    : `sh installer/install_postgres.sh ${username} ${password}`;
+
+  exec(command, (err, stdout, stderr) => {
+    if (err) {
+      return res.status(500).json({ success: false, error: stderr });
     }
 
-    // 3. Configure DB (user + db + tables)
-    const dbInfo = await configureDb(device.device_id);
-
-    res.status(200).json({
+    return res.json({
       success: true,
-      message: "Device configured successfully",
-      device_id: device.device_id,
-      db: dbInfo
-    });
-  } catch (err) {
-    console.error("❌ Device configuration failed:", err);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// ✅ Sync to blockchain (IPFS + IPCM + IOTA)
-app.post('/api/sync', async (req, res) => {
-  const { meshId, version, messages } = req.body;
-  if (!meshId || !messages) return res.status(400).send('Missing data');
-
-  try {
-    const result = await syncToBlockchain(messages, meshId, version);
-    res.status(200).json({ success: true, cid: result.cid });
-  } catch (err) {
-    console.error("❌ Sync failed:", err);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// ✅ Fetch latest global messages from IPFS
-app.get('/api/messages/:meshId', async (req, res) => {
-  const meshId = req.params.meshId;
-
-  try {
-    const cid = await getLatestCID(meshId);
-    if (!cid) return res.status(404).json({ error: 'No data found for this mesh' });
-
-    const ipfsData = await fetchFromIPFS(cid);
-    const messages = ipfsData.messages || [];
-
-    for (const msg of messages) {
-      await db.insertGlobalMessage(msg, meshId, ipfsData.version || 0);
-    }
-
-    res.status(200).json({ messages });
-  } catch (err) {
-    console.error("❌ Failed to fetch messages:", err);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// 🔍 Check if PostgreSQL is running
-async function tryPostgresConnection() {
-  const { Client } = require('pg');
-  try {
-    const client = new Client({
-      user: 'postgres',
-      host: 'localhost',
-      password: 'your_root_password',
-      port: 5432,
-    });
-    await client.connect();
-    await client.end();
-    return true;
-  } catch (err) {
-    return false;
-  }
-}
-
-// 🛠️ Optional: Batch installer for Postgres
-async function runPostgresInstaller() {
-  return new Promise((resolve, reject) => {
-    exec('cmd /c install_postgres.bat', (err, stdout, stderr) => {
-      if (err) {
-        console.error("❌ Batch install failed:", err);
-        reject(err);
-      } else {
-        console.log("✅ PostgreSQL installed successfully.");
-        resolve();
-      }
+      message: "Postgres installed and user created.",
+      username,
+      password,
     });
   });
-}
+});
 
+app.post("/api/validate-postgres", async (req, res) => {
+  const { username, password } = req.body;
+
+  if (!username || !password)
+    return res.status(400).json({ error: "Missing username or password" });
+
+  const result = await validatePostgres(username, password);
+  res.json(result);
+});
+
+
+app.post("/api/configure-device", async (req, res) => {
+  const { nickname } = req.body;
+  if (!nickname) return res.status(400).json({ error: "Missing nickname" });
+
+  const result = await configureDevice(nickname);
+  res.json(result);
+});
+
+app.post("/api/create-mesh", async (req, res) => {
+  const { meshName, deviceID } = req.body;
+
+  if (!meshName || !deviceID)
+    return res.status(400).json({ error: "Missing meshName or deviceID" });
+
+  try {
+    const result = await createMesh(meshName, deviceID);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error("❌ Mesh creation failed:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/join-mesh", async (req, res) => {
+  const { meshID, meshName, ipfsLink, deviceID } = req.body;
+
+  if (!meshID || !meshName || !ipfsLink || !deviceID) {
+    return res.status(400).json({ error: "Missing data" });
+  }
+
+  try {
+    const result = await joinMesh(meshID, meshName, ipfsLink, deviceID);
+    res.json(result);
+  } catch (err) {
+    console.error("❌ Join mesh failed:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/leave-mesh", async (req, res) => {
+  const { deviceID } = req.body;
+
+  if (!deviceID) return res.status(400).json({ error: "Missing deviceID" });
+
+  try {
+    const result = await leaveMesh(deviceID);
+    res.json(result);
+  } catch (err) {
+    console.error("❌ Leave mesh failed:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/send-message", async (req, res) => {
+  const { meshID, message, deviceID, deviceNickname } = req.body;
+
+  if (!meshID || !message || !deviceID || !deviceNickname) {
+    return res.status(400).json({ error: "Missing message data" });
+  }
+
+  const timestamp = new Date().toISOString();
+
+  // Broadcast via WebSocket
+  broadcastMessageToMesh(meshID, {
+    message,
+    deviceID,
+    deviceNickname,
+    timestamp
+  });
+
+  // Save to local database
+  const fs = require("fs");
+  const path = require("path");
+  const configPath = path.join(__dirname, "local_config.json");
+  const { username, password } = JSON.parse(fs.readFileSync(configPath, "utf-8")).postgres;
+
+  const client = new Client({
+    user: username,
+    password,
+    host: "localhost",
+    port: 5432,
+    database: deviceID
+  });
+
+  try {
+    await client.connect();
+    await client.query(`
+      INSERT INTO Local (MeshID, TimeStamp, Message, isSynced)
+      VALUES ($1, $2, $3, false)
+    `, [meshID, timestamp, message]);
+    await client.end();
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("❌ Error saving message:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+
+app.post("/api/updateCID", async (req, res) => {
+  const { cid } = req.body;
+  if (!cid) return res.status(400).send("Missing CID");
+
+  try {
+    const txHash = await updateCID(cid);
+    res.json({ success: true, txHash });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+
+app.get("/api/getCID", async (req, res) => {
+  try {
+    const cid = await getCID();
+    res.json({ success: true, cid });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+
+
+httpServer.listen(PORT, () => {
+  console.log(`✅ Express + WebSocket backend running on http://localhost:${PORT}`);
+});
+
+/* ─────────────── 🚀 START SERVER ─────────────── */
 app.listen(PORT, () => {
-  console.log(`🚀 Express backend running at http://localhost:${PORT}`);
+  console.log(`✅ Express backend running on http://localhost:${PORT}`);
 });
