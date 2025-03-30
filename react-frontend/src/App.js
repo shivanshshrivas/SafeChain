@@ -15,7 +15,7 @@ function App() {
   return (
     <AppProvider>
       <Router>
-        <div className="w-screen h-screen flex justify-center items-center bg-[#F5F5F0]">
+        <div className="w-screen flex justify-center items-center bg-[#F5F5F0]">
           <Routes>
             <Route path="/" element={<DeviceSetup />} />
             <Route path="/mesh-selection" element={<MeshDiscovery />} />

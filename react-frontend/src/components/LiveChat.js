@@ -90,6 +90,27 @@ const LiveChat = () => {
     }
   };
 
+  const handleSync = async () => {
+    const syncData = fetch("http://localhost:5000/api/sync",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ meshID, deviceID }),
+      }
+    )
+      .then((response) => response.json())
+      .then((data) => {
+        console.log("🔄 Sync successful:", data);
+        setMessages(data.messages); // Update local messages with synced data
+      })
+      .catch((error) => {
+        console.error("❌ Sync failed:", error);
+        alert("Failed to sync messages. Try again.");
+      }
+      );
+  }
   // We determine “sent” vs “received” by comparing the message's deviceID to our local deviceID
   const isSentByMe = (msg) => msg.deviceID === deviceID;
 
@@ -102,10 +123,17 @@ const LiveChat = () => {
           <div className="text-xl font-semibold font-figtree text-[#333333]">
             Live Mesh Chat
           </div>
-          <div className="text-md font-inter text-[#333333] mt-1 flex gap-4">
+          <div className="text-md flex flex-row justify-center font-inter text-[#333333] mt-1 flex gap-4">
             <span>Mesh ID: <b>{meshID}</b></span>
             <span>Device ID: <b>{deviceID}</b></span>
             <span>Nickname: <b>{nickname}</b></span>
+            <button
+            onClick={handleSync}
+              className="px-2 py-1 text-xs w-28 mb-4 rounded-full shadow-md font-inter bg-[#f5f5f5] text-[#333] border border-[#d6d6d6] transition-all duration-300 ease"
+              onMouseOver={(e) => (e.target.style.backgroundColor = "#eaeaea")} // Hover effect
+              onMouseOut={(e) => (e.target.style.backgroundColor = "#f5f5f5")}>
+              Sync Chats
+            </button>
           </div>
         </div>
 
