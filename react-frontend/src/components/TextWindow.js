@@ -80,7 +80,7 @@ const TextWindow = ({ nickname, deviceId }) => {
       {/* Input Field */}
       <div className="flex items-end gap-2 py-4 bg-transparent rounded-b-lg">
       <textarea
-        className="w-full overflow-hidden resize-none p-2 font-inter text-[#333333] rounded-3xl focus:outline-none focus:ring focus:ring-[#E0DACD] shadow-lg"
+        className="w-full overflow-hidden resize-none px-4 py-2 font-inter text-[#333333] rounded-3xl focus:outline-none focus:ring focus:ring-[#E0DACD] shadow-lg"
         value={newMessage}
         onChange={(e) => {
           setNewMessage(e.target.value);

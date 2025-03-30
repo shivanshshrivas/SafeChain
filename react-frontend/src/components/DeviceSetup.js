@@ -19,17 +19,17 @@ const DeviceSetup = () => {
 
   return (
     <div className="w-screen h-screen flex flex-col justify-center items-center bg-[#F5F5F0] text-[#3B3B3B] font-mono">
-      <h1 className="text-xl mb-4">Setup Your Device</h1>
+      <h1 className="text-xl font-figtree mb-4">Setup Your Device</h1>
       <input
         type="text"
         placeholder="Enter your nickname"
         value={name}
         onChange={(e) => setName(e.target.value)}
-        className="p-2 border-2 border-[#DEB887] rounded mb-4 bg-white"
+        className="px-4 py-2 border rounded-full shadow-md font-inter mb-4 bg-white"
       />
       <button 
         onClick={handleSetup} 
-        className="bg-[#E0DACD] hover:bg-[#D6D1C4] px-4 py-2 rounded"
+        className="bg-[#E0DACD] hover:bg-[#D6D1C4] px-4 py-2 rounded-full shadow-md font-inter"
       >
         Confirm
       </button>

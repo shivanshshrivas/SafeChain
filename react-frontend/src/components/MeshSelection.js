@@ -15,17 +15,17 @@ const MeshSelection = () => {
   };
 
   return (
-    <div className="w-screen h-screen flex flex-col justify-center items-center bg-[#F5F5F0] text-[#3B3B3B] font-mono">
-      <h1 className="text-xl mb-4">Join or Create a Mesh Network</h1>
+    <div className="w-screen h-screen flex flex-col justify-center items-center bg-[#F5F5F0] text-[#3B3B3B]">
+      <h1 className="text-xl mb-4 font-figtree">Join or Create a Mesh Network</h1>
       <button 
         onClick={handleCreateMesh} 
-        className="mb-4 bg-[#E0DACD] hover:bg-[#D6D1C4] px-4 py-2 rounded"
+        className="mb-4 w-36 bg-[#E0DACD] hover:bg-[#D6D1C4] duration-200 px-4 py-2 rounded-full shadow-md font-inter"
       >
         Create a Mesh
       </button>
       <button 
         onClick={handleJoinMesh} 
-        className="bg-[#E0DACD] hover:bg-[#D6D1C4] px-4 py-2 rounded"
+        className="w-36 bg-[#E0DACD] hover:bg-[#D6D1C4] duration-200 px-4 py-2 rounded-full shadow-md font-inter"
       >
         Join a Mesh
       </button>
