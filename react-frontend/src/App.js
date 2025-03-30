@@ -18,7 +18,7 @@ function App() {
         <div className="w-screen h-screen flex justify-center items-center bg-[#F5F5F0]">
           <Routes>
             <Route path="/" element={<DeviceSetup />} />
-            <Route path="/mesh-selection" element={<MeshSelection />} />
+            <Route path="/mesh-selection" element={<MeshDiscovery />} />
             <Route path="/join-mesh" element={<JoinMesh />} />
             <Route path="/main" element={<MainPage />} />
           </Routes>

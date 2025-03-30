@@ -2,9 +2,9 @@ import { useNavigate } from "react-router-dom";
 import { useAppContext } from "../context/AppContext";
 
 const JoinMesh = () => {
-  const { setMeshId } = useAppContext();
+  const { setMeshId, deviceId } = useAppContext(); // Grab deviceId
   const navigate = useNavigate();
-  
+
   // Placeholder for available networks
   const meshes = ["Mesh_123", "Mesh_456", "Mesh_789"];
 

@@ -384,6 +384,6 @@ app.get("/api/getCID", async (req, res) => {
 });
 
 
-httpServer.listen(PORT,"0.0.0.0", () => {
+httpServer.listen(PORT, () => {
   console.log(`✅ Express + WebSocket backend running on http://0.0.0.0:${PORT}`);
 });
