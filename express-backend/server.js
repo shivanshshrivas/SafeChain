@@ -17,7 +17,7 @@ const createMesh = require("./blockchain/createMesh");
 const joinMesh = require("./routes/joinMesh");
 const leaveMesh = require("./routes/leaveMesh");
 const { broadcastMessageToMesh } = require("./ws/wsServer");
-const syncToIPFS = require("./blockchain/syncToBlockchain");
+const syncToBlockchain = require("./blockchain/syncToBlockchain");
 
 
 dotenv.config();
@@ -25,7 +25,7 @@ dotenv.config();
 const app = express();
 const PORT = 5000;
 
-app.use(cors());
+app.use(cors({ origin: "*" }));
 app.use(express.json());
 
 app.get("/api/ping", (req, res) => {
@@ -145,7 +145,40 @@ app.post("/api/send-message", async (req, res) => {
 
   const timestamp = new Date().toISOString();
 
-  // Broadcast via WebSocket
+  try {
+    const configPath = path.join(__dirname, "local_config.json");
+    const { username, password } = JSON.parse(fs.readFileSync(configPath, "utf-8")).postgres;
+
+    const client = new Client({
+      user: username,
+      password,
+      host: "localhost",
+      port: 5432,
+      database: deviceID
+    });
+
+    await client.connect();
+    await client.query(
+      `INSERT INTO Local (MeshID, TimeStamp, Message, isSynced)
+       VALUES ($1, $2, $3, false)`,
+      [meshID, timestamp, message]
+    );
+    await client.end();
+
+    res.json({ success: true, timestamp });
+  } catch (err) {
+    console.error("❌ Error saving message:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/broadcast-message", (req, res) => {
+  const { meshID, message, deviceID, deviceNickname, timestamp } = req.body;
+
+  if (!meshID || !message || !deviceID || !deviceNickname || !timestamp) {
+    return res.status(400).json({ error: "Missing broadcast data" });
+  }
+
   broadcastMessageToMesh(meshID, {
     message,
     deviceID,
@@ -153,32 +186,9 @@ app.post("/api/send-message", async (req, res) => {
     timestamp
   });
 
-  // Save to local database
-  const configPath = path.join(__dirname, "local_config.json");
-  const { username, password } = JSON.parse(fs.readFileSync(configPath, "utf-8")).postgres;
-
-  const client = new Client({
-    user: username,
-    password,
-    host: "localhost",
-    port: 5432,
-    database: deviceID
-  });
-
-  try {
-    await client.connect();
-    await client.query(`
-      INSERT INTO Local (MeshID, TimeStamp, Message, isSynced)
-      VALUES ($1, $2, $3, false)
-    `, [meshID, timestamp, message]);
-    await client.end();
-
-    res.json({ success: true });
-  } catch (err) {
-    console.error("❌ Error saving message:", err);
-    res.status(500).json({ success: false, error: err.message });
-  }
+  res.json({ success: true });
 });
+
 
 app.post("/api/sync", async (req, res) => {
   const { meshID, deviceID } = req.body;
@@ -204,8 +214,8 @@ app.post("/api/sync", async (req, res) => {
 
     // 1. Get all unsynced messages
     const { rows: unsyncedMessages } = await client.query(`
-      SELECT * FROM Local
-      WHERE isSynced = false AND MeshID = $1
+      SELECT * FROM local
+      WHERE issynced = false AND meshid = $1
     `, [meshID]);
 
     if (unsyncedMessages.length === 0) {
@@ -221,13 +231,13 @@ app.post("/api/sync", async (req, res) => {
     }));
 
     // 3. Upload to IPFS & blockchain
-    const { cid, version } = await syncToIPFS(formatted, meshID);
+    const { cid, version } = await syncToBlockchain(formatted, meshID);
 
     // 4. Mark messages as synced
     await client.query(`
-      UPDATE Local
-      SET isSynced = true
-      WHERE isSynced = false AND MeshID = $1
+      UPDATE local
+      SET issynced = true
+      WHERE issynced = false AND meshid = $1
     `, [meshID]);
 
     await client.end();
@@ -266,7 +276,7 @@ app.post("/api/get-latest-version", async (req, res) => {
     console.log("📥 Fetching from IPFS:", cid);
 
     // 2. Fetch data from IPFS gateway
-    const ipfsURL = `https://gateway.pinata.cloud/ipfs/${cid}`;
+    const ipfsURL = `https://crimson-high-narwhal-362.mypinata.cloud/ipfs/${cid}`;
     const response = await axios.get(ipfsURL);
     const messages = response.data;
 
@@ -374,6 +384,6 @@ app.get("/api/getCID", async (req, res) => {
 });
 
 
-httpServer.listen(PORT, () => {
-  console.log(`✅ Express + WebSocket backend running on http://0.sfa.0.0:${PORT}`);
+httpServer.listen(PORT,"0.0.0.0", () => {
+  console.log(`✅ Express + WebSocket backend running on http://0.0.0.0:${PORT}`);
 });
