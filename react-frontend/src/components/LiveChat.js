@@ -99,13 +99,13 @@ const LiveChat = () => {
 
         {/* Header: Displaying relevant info (optional) */}
         <div className="py-2 px-4 border-b border-gray-300 flex flex-col">
-          <div className="text-lg font-semibold">
-            💬 Live Mesh Chat
+          <div className="text-xl font-semibold font-figtree text-[#333333]">
+            Live Mesh Chat
           </div>
-          <div className="text-xs text-[#333333] mt-1 flex gap-4">
-            <span>Mesh ID: {meshID}</span>
-            <span>Device ID: {deviceID}</span>
-            <span>Nickname: {nickname}</span>
+          <div className="text-md font-inter text-[#333333] mt-1 flex gap-4">
+            <span>Mesh ID: <b>{meshID}</b></span>
+            <span>Device ID: <b>{deviceID}</b></span>
+            <span>Nickname: <b>{nickname}</b></span>
           </div>
         </div>
 
@@ -154,7 +154,7 @@ const LiveChat = () => {
         {/* Input field */}
         <div className="flex items-end gap-2 py-4 bg-transparent rounded-b-lg">
           <textarea
-            className="w-full overflow-hidden resize-none px-4 py-2 font-inter text-[#333333] rounded-3xl focus:outline-none focus:ring focus:ring-[#E0DACD] shadow-lg"
+            className="w-full overflow-x-hidden max-h-[150px] resize-none px-4 py-2 font-inter text-[#333333] rounded-3xl focus:outline-none focus:ring focus:ring-[#E0DACD] shadow-lg"
             value={message}
             onChange={(e) => {
               setMessage(e.target.value);
