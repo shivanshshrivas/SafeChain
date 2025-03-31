@@ -57,12 +57,12 @@ export default function MapComponent() {
       :
       <CuteLoader /> 
       }
-      <button onClick={() => {setIsMaximized(!isMaximized); console.log(isMaximized)}} className='absolute text-center flex justify-center items-center top-2 right-2 z-10 bg-white shadow-lg rounded-[50%] h-9 w-9 opacity-100'>
+      {/* <button onClick={() => {setIsMaximized(!isMaximized); console.log(isMaximized)}} className='absolute text-center flex justify-center items-center top-2 right-2 z-10 bg-white shadow-lg rounded-[50%] h-9 w-9 opacity-100'>
         {
           isMaximized ? <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g id="SVGRepo_bgCarrier" strokeWidth="0"></g><g id="SVGRepo_tracerCarrier" strokeLinecap="round" strokeLinejoin="round"></g><g id="SVGRepo_iconCarrier"> <path d="M6 12L18 12" stroke="#333333" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path> </g></svg>
             : <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g id="SVGRepo_bgCarrier" strokeWidth="0"></g><g id="SVGRepo_tracerCarrier" strokeLinecap="round" strokeLinejoin="round"></g><g id="SVGRepo_iconCarrier"> <path d="M4 12H20M12 4V20" stroke="#000000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path> </g></svg>
         }
-      </button>
+      </button> */}
     </div>
   );
 }

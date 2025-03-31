@@ -25,7 +25,7 @@ dotenv.config();
 const app = express();
 const PORT = 5000;
 
-app.use(cors({ origin: "*" }));
+app.use(cors());
 app.use(express.json());
 
 app.get("/api/ping", (req, res) => {
@@ -384,6 +384,6 @@ app.get("/api/getCID", async (req, res) => {
 });
 
 
-httpServer.listen(PORT,"0.0.0.0", () => {
+httpServer.listen(PORT, () => {
   console.log(`✅ Express + WebSocket backend running on http://0.0.0.0:${PORT}`);
 });

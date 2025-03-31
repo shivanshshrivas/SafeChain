@@ -1,6 +1,6 @@
 
 import logo from './logo.svg';
-import './App.css';
+// import './App.css';
 import CreateMeshTester from './components/CreateMeshTester';
 import MeshDiscovery from './components/MeshDiscovery';
 import LiveChat from './components/LiveChat';
@@ -15,10 +15,10 @@ function App() {
   return (
     <AppProvider>
       <Router>
-        <div className="w-screen h-screen flex justify-center items-center bg-[#F5F5F0]">
+        <div className="w-screen flex justify-center items-center bg-[#F5F5F0]">
           <Routes>
             <Route path="/" element={<DeviceSetup />} />
-            <Route path="/mesh-selection" element={<MeshSelection />} />
+            <Route path="/mesh-selection" element={<MeshDiscovery />} />
             <Route path="/join-mesh" element={<JoinMesh />} />
             <Route path="/main" element={<MainPage />} />
           </Routes>
