@@ -1,2 +1,2 @@
 # SafeChain
-Repository for Blockathon: SafeChain
+Repository for Blockathon: SafeChain for blockathon
